@@ -1,0 +1,88 @@
+name: Build Windows exe
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the files to
+        default: v1.0.0
+  push:
+    paths:
+      - .github/workflows/build.yml
+      - .github/exe_launcher.py
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || 'v1.0.0' }}
+  FFMPEG_VERSION: "7.1.1"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unpack the program from MusicSync.zip
+        shell: pwsh
+        run: |
+          Expand-Archive -Path MusicSync.zip -DestinationPath src -Force
+          Get-ChildItem src\MusicSync\app | Select-Object -ExpandProperty Name
+
+      - name: Install Python packages
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r src\MusicSync\app\requirements.txt pyinstaller
+
+      - name: Download ffmpeg and Deno
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bin, tmp | Out-Null
+          $ff = "https://github.com/GyanD/codexffmpeg/releases/download/$env:FFMPEG_VERSION/ffmpeg-$env:FFMPEG_VERSION-essentials_build.zip"
+          Invoke-WebRequest $ff -OutFile tmp\ffmpeg.zip
+          Expand-Archive tmp\ffmpeg.zip -DestinationPath tmp\ffmpeg -Force
+          Copy-Item (Get-ChildItem tmp\ffmpeg -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName bin\
+          Copy-Item (Get-ChildItem tmp\ffmpeg -Recurse -Filter ffprobe.exe | Select-Object -First 1).FullName bin\
+          Invoke-WebRequest "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -OutFile tmp\deno.zip
+          Expand-Archive tmp\deno.zip -DestinationPath bin -Force
+          Get-ChildItem bin
+
+      - name: Build MusicSync.exe
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name MusicSync `
+            --icon src\MusicSync\app\assets\icon.ico `
+            --paths src\MusicSync\app `
+            --add-data "src\MusicSync\app\assets;assets" `
+            --add-binary "bin\ffmpeg.exe;bin" `
+            --add-binary "bin\ffprobe.exe;bin" `
+            --add-binary "bin\deno.exe;bin" `
+            --collect-submodules yt_dlp `
+            --collect-all yt_dlp_ejs `
+            --collect-all ytmusicapi `
+            --hidden-import tkinter `
+            --hidden-import musicsync.gui `
+            .github\exe_launcher.py
+          Get-ChildItem dist
+
+      - name: Self-test the exe
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\MusicSync.exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content dist\selftest.txt
+          if ($p.ExitCode -ne 0) { throw "self-test failed (exit code $($p.ExitCode))" }
+          Remove-Item dist\selftest.txt
+
+      - name: Attach to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item src\MusicSync\app\extension\ytmusic-exporter.xpi dist\ytmusic-exporter.xpi
+          gh release upload $env:TAG dist\MusicSync.exe dist\ytmusic-exporter.xpi --clobber --repo ${{ github.repository }}
