@@ -4,7 +4,11 @@ Free Windows tool that turns your song lists (Spotify links, YouTube Music playl
 
 ## Download
 
-Open **MusicSync.zip** in the file list above and click the download button. Unzip it and double-click `Start Music Sync.bat`. The README inside the zip has the full tutorial.
+**Easiest: no Python needed.** Open the [latest release](https://github.com/oasiskovacs/music-sync/releases/latest) and download **MusicSync.exe**. Double-click it. ffmpeg and Deno are built in.
+
+Windows may show "Windows protected your PC" because the exe is not code-signed. Click **More info**, then **Run anyway**. The exe is built automatically from this repository by [the public workflow](.github/workflows/build.yml).
+
+**Python version:** open **MusicSync.zip** in the file list above, download it, unzip it and double-click `Start Music Sync.bat`. The README inside the zip has the full tutorial, including the Firefox extension that exports YouTube Music playlists (also available as **ytmusic-exporter.xpi** in the release).
 
 ## Read this first
 
